@@ -25,12 +25,6 @@ voltage divider with the pull-down. Do not use pull-ups on the signal pins —
 with Sleeve already at 3.3V, a pull-up would put both ends of the divider at
 the same voltage and eliminate all differentiation.
 
-**Warning — do not connect the pedal to the Feather while it is also plugged
-into the piano.** Digital pianos typically supply 3.3–5V through the pedal
-jack. The Feather M4's analog pins are not 5V tolerant; feeding 5V into an
-analog pin will damage the board. Only connect the pedal to the Feather with
-the piano disconnected.
-
 ## ✅ 3. Potentiometer does not affect Ring baseline
 
 Initial concern was that the damper potentiometer body spans Ring–Sleeve and
@@ -67,17 +61,28 @@ Sleeve/3.3V end when damper is released; moves toward Ring/GND end when pressed)
   - Future: `midi_output.h` — MIDI CC send helpers
 - Goal: keep the main .ino under ~80 lines; no 1000-line files.
 
-## 6. Calibration sequence (implemented in calibration.h)
+## ✅ 6. Calibration sequence (implemented in calibration.h)
 
 Triggered by holding the left or middle pedal (or both) when the M4 powers on.
 The Feather M4 Express has no user-programmable button; the reset button is not
 available for user code. Calibration is checked once in `setup()` immediately
 after calibration data loads.
-Right-to-left pedal order:
+
+**Boot / trigger sequence:**
+
+| LED | Condition |
+|---|---|
+| Off | No pedal held at boot — normal startup |
+| Solid blue | Pedal detected held — counting down `CALIB_HOLD_MS` (2 s) |
+| Fast blink blue | Hold complete — release pedal to begin calibration |
+| Off (pedal released) | Enters calibration sequence below |
+| Off (pedal released early) | Hold cancelled — normal startup |
+
+**Calibration sequence** (right-to-left pedal order):
 
 | LED | Action |
 |---|---|
-| Solid blue | Release all pedals — reads baseline (2 s) |
+| Slow blink blue | Calibration start. Release all pedals to begin — reads baseline (2 s) |
 | Slow blink violet → fast blink violet | Press + hold right / damper pedal, release when fast |
 | Slow blink red → fast blink red | Press + hold middle / sostenuto pedal, release when fast |
 | Slow blink orange → fast blink orange | Press + hold left / soft pedal, release when fast |

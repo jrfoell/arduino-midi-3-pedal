@@ -1,5 +1,5 @@
 // calibration.h
-// Calibration data structure, EEPROM persistence, NeoPixel helpers, and the
+// Calibration data structure, Flash persistence, NeoPixel helpers, and the
 // startup-triggered calibration sequence.
 
 #pragma once
@@ -29,7 +29,7 @@
 
 // ─── Calibration data ────────────────────────────────────────────────────────
 
-static const uint32_t CALIB_MAGIC      = 0xFEED1234;
+static const uint32_t CALIB_MAGIC       = 0xFEED1234;
 static const int      CALIB_EEPROM_ADDR = 0;
 
 struct CalibrationData {
@@ -143,18 +143,41 @@ static int calibPedalPhase(Adafruit_NeoPixel& px, uint32_t color,
 }
 
 // Returns true if a Ring pedal is held continuously for CALIB_HOLD_MS at boot.
-// Drops out immediately if the pedal is released during the hold window.
+// NeoPixel feedback: solid blue during the hold window, then fast-blink blue
+// prompting the user to release. Returns false if the pedal is released before
+// CALIB_HOLD_MS elapses.
 // Call once in setup() after calibration data has been loaded or defaulted.
-inline bool pedalHeldAtBoot(const CalibrationData& calData) {
+inline bool pedalHeldAtBoot(const CalibrationData& calData, Adafruit_NeoPixel& px) {
   int threshold = calData.ringBaseline + CALIB_PRESS_MARGIN;
+  const uint32_t BLUE = px.Color(0, 0, 200);
 
   if (analogRead(PIN_RING) <= threshold) return false;
 
+  // Solid blue while hold window counts down
+  neoSet(px, BLUE);
   unsigned long start = millis();
   while (millis() - start < CALIB_HOLD_MS) {
-    if (analogRead(PIN_RING) <= threshold) return false;
+    if (analogRead(PIN_RING) <= threshold) {
+      neoSet(px, 0);
+      return false;
+    }
     delay(20);
   }
+
+  // Fast-blink blue — prompt user to release to begin calibration
+  unsigned long blinkTimer = millis();
+  bool blinkOn = true;
+  while (analogRead(PIN_RING) > threshold) {
+    unsigned long now = millis();
+    if (now - blinkTimer >= CALIB_FAST_BLINK_MS) {
+      blinkOn = !blinkOn;
+      neoSet(px, blinkOn ? BLUE : 0);
+      blinkTimer = now;
+    }
+    delay(5);
+  }
+
+  neoSet(px, 0);
   return true;
 }
 

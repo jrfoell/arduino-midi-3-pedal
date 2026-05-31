@@ -43,7 +43,7 @@ void setup() {
   }
 
   // Enter calibration if the left or middle pedal (or both) is held at power-on
-  if (pedalHeldAtBoot(calData)) {
+  if (pedalHeldAtBoot(calData, pixel)) {
     runCalibration(pixel, calData);
   }
 
