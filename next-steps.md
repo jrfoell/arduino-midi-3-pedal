@@ -52,13 +52,15 @@ Sleeve/3.3V end when damper is released; moves toward Ring/GND end when pressed)
 
 ## 5. Code architecture
 
+- **Platform: Arduino (C++) only.** CircuitPython is explicitly avoided — it is
+  too slow for low-latency MIDI requirements.
 - **All settable constants** (pins, MIDI channel, defaults, timing) live in
   `arduino-midi-3-pedal.ino` for easy access.
 - **Related functionality** is split into header files included by the .ino:
   - `calibration.h` — `CalibrationData` struct, EEPROM read/write,
-    NeoPixel helpers, `runCalibration()`, `checkCalibrationButton()`
+    NeoPixel helpers, `runCalibration()`, `pedalHeldAtBoot()`
   - Future: `pedal_decode.h` — voltage-to-state decode logic
-  - Future: `midi_output.h` — MIDI CC send helpers
+  - Future: `midi_output.h` — MIDI CC send helpers (hardware DIN + USB host)
 - Goal: keep the main .ino under ~80 lines; no 1000-line files.
 
 ## ✅ 6. Calibration sequence (implemented in calibration.h)
@@ -94,11 +96,23 @@ absent or corrupt, compile-time defaults are used automatically.
 
 ## 7. Next: MIDI output and pedal decode logic
 
+MIDI CC messages must be sent simultaneously on two outputs:
+
+**Hardware DIN MIDI** (MIDI FeatherWing):
+- Serial1 @ 31250 baud via *MIDI Library* by Forty Seven Effects
+
+**USB Host MIDI** (USB Host FeatherWing with MAX3421E):
+- Library: *Adafruit TinyUSB* — `CFG_TUH_MIDI` already enabled, no config edit needed
+- CS → pin 10, INT → pin 9, hardware SPI (pins 23/24/25)
+- `tuh_task()` must be called every loop iteration
+- Keyboards connect to the USB Host FeatherWing as USB MIDI devices
+
+**Pedal decode:**
 - Read Ring (A3) → decode middle/left switch states using thresholds derived
   from calibration data (`threshNoneToMiddle`, `threshMiddleToLeft`,
   `threshLeftToBoth`).
 - Read Tip (A2) → map damper position to CC 64 value 0–127, accounting for
   inverted range (high at rest, low when pressed).
 - Debounce middle and left switches with `millis()`-based timing.
-- Send CC 64 (damper), CC 66 (sostenuto), CC 67 (soft) on state changes via
-  Serial1 @ 31250 baud using the MIDI Library.
+- Send CC 64 (damper), CC 66 (sostenuto), CC 67 (soft) on state changes to
+  both outputs via a single `sendCC()` function in `midi_output.h`.

@@ -6,18 +6,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 An Arduino sketch for the **Adafruit Feather M4 Express (ATSAMD51)** + **Adafruit MIDI FeatherWing** that reads a triple piano-style sustain pedal unit connected via a TRS (1/4" stereo) jack and translates pedal state changes into MIDI Control Change messages sent to MIDI OUT.
 
+**Platform constraint:** All code must be Arduino (C++). Do not suggest or use CircuitPython — it is too slow for low-latency MIDI requirements.
+
 ## Hardware
 
 | Component | Detail |
 |---|---|
 | MCU board | Adafruit Feather M4 Express (ATSAMD51, 3.3V logic) |
 | MIDI add-on | Adafruit MIDI FeatherWing Kit |
+| USB host add-on | Adafruit USB Host FeatherWing with MAX3421E |
 | Pedal input | Triple piano pedal unit — TRS 6.3mm (1/4") connector |
 
 **MIDI FeatherWing** stacks directly on Feather headers:
 - MIDI OUT → Feather `Serial1` TX (GPIO #1)
 - MIDI IN → Feather `Serial1` RX (GPIO #0)
 - Baud rate: 31250
+
+**USB Host FeatherWing (MAX3421E)** stacks directly on Feather headers:
+- Communicates via hardware SPI (MOSI=24, MISO=23, SCK=25)
+- CS → GPIO #10, INT → GPIO #9
+- Provides USB host port for connecting USB MIDI keyboards
+- No conflict with MIDI FeatherWing (separate interfaces) or native USB Serial
 
 ## Triple-Pedal TRS Wiring
 
@@ -58,20 +67,23 @@ CC value convention: 0–63 = off/released, 64–127 = on/pressed. The potentiom
 - *MIDI Library* by Forty Seven Effects
 - *Adafruit NeoPixel* by Adafruit
 - *FlashStorage_SAMD* by Khoi Hoang — EEPROM emulation on SAMD51 internal NVM (the Feather M4 has no hardware EEPROM; do not use the standard `EEPROM.h`)
+- *Adafruit TinyUSB Library* by Adafruit — USB host MIDI via MAX3421E (`CFG_TUH_MIDI` is already set to `CFG_TUH_DEVICE_MAX` in this library; no manual config edit required)
 
 ## Sketch Architecture
 
 ```
 setup()
-  MIDI.begin() on Serial1 @ 31250 baud
+  init hardware MIDI — Serial1 @ 31250 baud via MIDI FeatherWing
+  init USB host MIDI — TinyUSB + MAX3421E (CS=10, INT=9)
   configure A2 (Tip) and A3 (Ring) as analog inputs — no internal pull-up or pull-down
   (use external pull-down resistors to GND on each signal pin; Sleeve connects to 3.3V via external series resistor)
 
 loop()
-  raw = analogRead(A2)          // 12-bit: 0–4095 (Feather M4, not 10-bit AVR)
+  tuh_task()                     // service TinyUSB host stack (must call every loop)
+  raw = analogRead(A2)           // 12-bit: 0–4095 (Feather M4, not 10-bit AVR)
   decode pedal states from raw voltage thresholds
   for each pedal whose state changed since last loop:
-    MIDI.sendControlChange(ccNumber, value, channel)
+    send CC via hardware MIDI (Serial1) and USB host MIDI simultaneously
   update last-known state
 ```
 
