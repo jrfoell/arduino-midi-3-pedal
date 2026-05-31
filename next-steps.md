@@ -31,14 +31,13 @@ jack. The Feather M4's analog pins are not 5V tolerant; feeding 5V into an
 analog pin will damage the board. Only connect the pedal to the Feather with
 the piano disconnected.
 
-## ✅ 3. Account for potentiometer baseline shift in threshold logic
+## ✅ 3. Potentiometer does not affect Ring baseline
 
-The Right/sustain pedal is a potentiometer whose body spans Ring and Sleeve —
-so its position continuously shifts the Ring baseline voltage even when not
-deliberately pressed. The decode logic for the Middle and Left pedals will need
-to handle this, likely by detecting a relative voltage *change* from the current
-baseline rather than comparing against fixed absolute thresholds. Tip (the
-wiper) is read separately to get the right-pedal position.
+Initial concern was that the damper potentiometer body spans Ring–Sleeve and
+would shift the Ring baseline continuously. Testing confirmed this is not the
+case — Ring reads ~60 at rest regardless of damper pedal position. The damper
+pot is isolated from the Ring circuit; only its wiper output appears on Tip.
+Middle and Left pedal thresholds are stable and fixed calibration values work.
 
 ## ✅ 4. Initial ADC readings confirmed
 
@@ -98,6 +97,3 @@ absent or corrupt, compile-time defaults are used automatically.
 - Debounce middle and left switches with `millis()`-based timing.
 - Send CC 64 (damper), CC 66 (sostenuto), CC 67 (soft) on state changes via
   Serial1 @ 31250 baud using the MIDI Library.
-- The damper potentiometer body spans Ring–Sleeve, so Ring baseline shifts with
-  damper position. The decode logic for middle/left may need to detect a
-  relative change from a rolling Ring baseline rather than fixed thresholds.

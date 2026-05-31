@@ -77,8 +77,6 @@
 
 *(Calculated with R1 = 330Ω, R3 = 10kΩ. Formula: V = 3.3 × R3 / (R1 + R\_internal + R3))*
 
-> Note: the damper potentiometer body also spans Ring–Sleeve, so A3's baseline shifts continuously with damper pedal position. Threshold decoding for Middle and Left must detect a voltage change relative to the current baseline, not fixed absolute values.
-
 **Tip (A2)** — The damper potentiometer wiper. Reads proportionally between 0 V (pedal fully released) and ~3.3 V (pedal fully pressed), enabling half-pedal detection.
 
 ---

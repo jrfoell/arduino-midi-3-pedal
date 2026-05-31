@@ -39,7 +39,7 @@ The pedal unit uses a **single-wire resistor-network** encoding for the center a
 
 Because two pedals share one analog line, pressing different pedals (or combinations) produces distinct voltage levels on the Ring conductor. **The specific resistor values must be measured** from the physical unit to establish accurate voltage thresholds.
 
-The potentiometer body spans Ring and Sleeve, so the damper pedal position continuously shifts the Ring baseline voltage — the decode logic for Middle and Left must account for this. Tip (the wiper) gives a proportional reading of right-pedal position independently.
+Tip (the wiper) gives a proportional reading of right-pedal position independently. Testing confirmed the damper potentiometer does not affect the Ring baseline — Middle and Left pedal thresholds are stable.
 
 Calibration / threshold discovery should be done in a dedicated sketch before encoding full MIDI logic.
 
