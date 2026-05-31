@@ -2,8 +2,13 @@
   "permissions": {
     "allow": [
       "WebFetch(domain:github.com)",
+      "WebSearch",
       "WebFetch(domain:learn.adafruit.com)",
-      "WebFetch(domain:forum.arduino.cc)"
+      "WebFetch(domain:forum.arduino.cc)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:forums.adafruit.com)",
+      "Bash(grep -r \"tuh_midi_mount_cb\" /home/justin/Arduino/libraries/Adafruit_TinyUSB_Library/src/ 2>/dev/null | head -20)",
+      "Read(//home/justin/Arduino/libraries/Adafruit_TinyUSB_Library/src/**)"
     ]
   }
 }

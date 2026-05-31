@@ -13,6 +13,7 @@
 #include <SPI.h>
 #include <Adafruit_TinyUSB.h>
 #include <MIDI.h>
+#include "debug.h"
 
 // ─── Pin assignments (USB Host FeatherWing / MAX3421E) ────────────────────────
 #define PIN_USB_CS   10   // Chip select
@@ -68,11 +69,13 @@ extern "C" {
     (void)mount_cb_data;
     _usbMidiIdx      = idx;
     usbMidiConnected = true;
+    DEBUG_PRINTLN("USB MIDI: device connected");
   }
 
   void tuh_midi_umount_cb(uint8_t idx) {
     (void)idx;
     _usbMidiIdx      = 255;
     usbMidiConnected = false;
+    DEBUG_PRINTLN("USB MIDI: device disconnected");
   }
 }

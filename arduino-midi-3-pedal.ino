@@ -2,10 +2,16 @@
 // Adafruit Feather M4 Express + MIDI FeatherWing
 // Reads a triple piano pedal unit (TRS) and sends MIDI CC messages.
 
+// ─── Debug ───────────────────────────────────────────────────────────────────
+// Uncomment to enable serial debug output. Must appear before all #includes.
+#define DEBUG_SERIAL
+
 #include <Adafruit_NeoPixel.h>
+#include "debug.h"
 #include "midi_output.h"
 #include "calibration.h"
 #include "status.h"
+#include "pedal_decode.h"
 
 // ─── Pin assignments ──────────────────────────────────────────────────────────
 #define PIN_PIXEL         8   // NeoPixel data  (Feather M4: PIN_NEOPIXEL = 8)
@@ -26,6 +32,12 @@ CalibrationData calData;
 
 // ─── Setup ───────────────────────────────────────────────────────────────────
 void setup() {
+  Serial.begin(115200);
+  while (!Serial);
+  Serial.println("MIDI 3 Pedal serial ready");
+
+  DEBUG_PRINTLN("Debug serial ready");
+
   analogReadResolution(12);
 
   pinMode(LED_BUILTIN, OUTPUT);
@@ -54,6 +66,7 @@ void setup() {
 
 // ─── Loop ────────────────────────────────────────────────────────────────────
 void loop() {
+  Serial.println("Looping");
   usbMidiTask();
 
   int tipRaw  = analogRead(PIN_TIP);
@@ -61,5 +74,9 @@ void loop() {
 
   updateStatusLed(pixel, tipRaw, usbMidiConnected);
 
-  // Pedal decode and MIDI output will go here
+  // Damper pedal (right / Tip)
+  int damperCC = updateDamper(tipRaw, calData);
+  if (damperCC >= 0) {
+    sendCC(MIDI_CHANNEL, CC_DAMPER, (uint8_t)damperCC);
+  }
 }

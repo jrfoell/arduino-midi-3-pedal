@@ -6,6 +6,7 @@
 
 #include <Adafruit_NeoPixel.h>
 #include <FlashStorage_SAMD.h>
+#include "debug.h"
 
 // ─── Pin assignments ─────────────────────────────────────────────────────────
 #define PIN_TIP          A2   // Right / damper pedal potentiometer wiper
@@ -191,6 +192,8 @@ static void runCalibration(Adafruit_NeoPixel& px, CalibrationData& data) {
   const uint32_t YELLOW = px.Color(220, 180, 0  );
   const uint32_t GREEN  = px.Color(0,   200, 0  );
 
+  DEBUG_PRINTLN("Calibration: initiated");
+
   // Wait for any held pedal to be released before sampling the baseline.
   // Necessary because calibration is triggered by holding a pedal at boot.
   while (analogRead(PIN_RING) > (data.ringBaseline + CALIB_PRESS_MARGIN)) {
@@ -199,6 +202,7 @@ static void runCalibration(Adafruit_NeoPixel& px, CalibrationData& data) {
   delay(100);
 
   // Phase 1: Solid blue — sample Ring and Tip with all pedals at rest
+  DEBUG_PRINTLN("Calibration: step 1 — rest (release all pedals)");
   neoSet(px, BLUE);
   {
     long ringSum = 0, tipSum = 0;
@@ -213,37 +217,48 @@ static void runCalibration(Adafruit_NeoPixel& px, CalibrationData& data) {
     data.ringBaseline = (int)(ringSum / count);
     data.tipRest      = (int)(tipSum  / count);
   }
+  DEBUG_PRINT_VAL("  ringBaseline", data.ringBaseline);
+  DEBUG_PRINT_VAL("  tipRest",      data.tipRest);
   neoSet(px, 0);
   delay(400);
 
   // Phase 2: Violet — right / damper pedal (Tip falls when pressed)
+  DEBUG_PRINTLN("Calibration: step 2 — damper (press right pedal)");
   data.tipPressed = calibPedalPhase(px, VIOLET,
                                      PIN_TIP,
                                      data.tipRest - CALIB_PRESS_MARGIN,
                                      false);
+  DEBUG_PRINT_VAL("  tipPressed", data.tipPressed);
 
   // Phase 3: Red — middle / sostenuto pedal (Ring rises when pressed)
+  DEBUG_PRINTLN("Calibration: step 3 — sostenuto (press middle pedal)");
   data.ringMiddle = calibPedalPhase(px, RED,
                                      PIN_RING,
                                      data.ringBaseline + CALIB_PRESS_MARGIN,
                                      true);
+  DEBUG_PRINT_VAL("  ringMiddle", data.ringMiddle);
 
   // Phase 4: Orange — left / soft pedal (Ring rises when pressed)
+  DEBUG_PRINTLN("Calibration: step 4 — soft (press left pedal)");
   data.ringLeft = calibPedalPhase(px, ORANGE,
                                    PIN_RING,
                                    data.ringBaseline + CALIB_PRESS_MARGIN,
                                    true);
+  DEBUG_PRINT_VAL("  ringLeft", data.ringLeft);
 
   // Phase 5: Yellow — middle + left together
   // Threshold set above ringLeft so a single pedal doesn't accidentally trigger
+  DEBUG_PRINTLN("Calibration: step 5 — both (press middle + left together)");
   data.ringBoth = calibPedalPhase(px, YELLOW,
                                    PIN_RING,
                                    data.ringLeft + CALIB_PRESS_MARGIN / 2,
                                    true);
+  DEBUG_PRINT_VAL("  ringBoth", data.ringBoth);
 
   // Phase 6: Blink green while writing to EEPROM, then off
   data.magic = CALIB_MAGIC;
   saveCalibration(data);
+  DEBUG_PRINTLN("Calibration: complete — values written to flash");
   for (int i = 0; i < 6; i++) {
     neoSet(px, (i % 2 == 0) ? GREEN : 0);
     delay(200);

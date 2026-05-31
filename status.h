@@ -11,6 +11,7 @@
 #pragma once
 
 #include <Adafruit_NeoPixel.h>
+#include "debug.h"
 
 // Tip ADC reading below this value means no pedal is plugged in.
 // With no pedal: Tip reads ~0 (10kΩ pull-down, nothing driving it).
@@ -21,10 +22,17 @@
 // Only calls pixel.show() when the state actually changes.
 // usbMidiConnected: pass the mount-state flag from midi_output.h once implemented.
 inline void updateStatusLed(Adafruit_NeoPixel& px, int tipRaw, bool usbMidiConnected) {
-  static uint32_t lastColor = 0xFFFFFFFF;  // impossible initial value forces first update
+  static uint32_t lastColor        = 0xFFFFFFFF;
+  static bool     lastPedalPresent = false;
+
+  bool pedalPresent = (tipRaw >= STATUS_PEDAL_THRESHOLD);
+  if (pedalPresent != lastPedalPresent) {
+    DEBUG_PRINTLN(pedalPresent ? "Pedal: connected" : "Pedal: disconnected");
+    lastPedalPresent = pedalPresent;
+  }
 
   uint32_t color;
-  if (tipRaw < STATUS_PEDAL_THRESHOLD) {
+  if (!pedalPresent) {
     color = px.Color(200, 0, 0);  // Red: no pedal — MIDI state ignored
   } else if (usbMidiConnected) {
     color = px.Color(0, 200, 0);  // Green: pedal + MIDI both present
