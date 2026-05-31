@@ -58,16 +58,22 @@ CC value convention: 0–63 = off/released, 64–127 = on/pressed. The potentiom
 
 1. **Board package**: Install *Adafruit SAMD Boards* via Boards Manager (requires *Arduino SAMD Boards* ≥ 1.6.11 first).
 2. **Board selection**: Tools → Board → Adafruit Feather M4 Express (ATSAMD51)
-3. **Port**: Tools → Port → the USB serial port that appears when the board is plugged in
-4. **Compile**: Sketch → Verify/Compile (`Ctrl+R`)
-5. **Upload**: Sketch → Upload (`Ctrl+U`)
-6. **Serial monitor**: Tools → Serial Monitor (`Ctrl+Shift+M`) at 115200 baud — use for debug/calibration output
+3. **USB stack**: Tools → USB Stack → **TinyUSB** — required; without this the build fails with `#error TinyUSB is not selected`
+4. **MIDI host flag**: Create `~/.arduino15/packages/adafruit/hardware/samd/<version>/platform.local.txt` with the following content. This enables the TinyUSB USB MIDI host class driver on SAMD51, which Adafruit omits for SAMD (tracked in Adafruit TinyUSB issue #360). This file is not overwritten by board package updates.
+   ```
+   compiler.cpp.extra_flags=-DCFG_TUH_MIDI=CFG_TUH_DEVICE_MAX
+   compiler.c.extra_flags=-DCFG_TUH_MIDI=CFG_TUH_DEVICE_MAX
+   ```
+5. **Port**: Tools → Port → the USB serial port that appears when the board is plugged in
+6. **Compile**: Sketch → Verify/Compile (`Ctrl+R`)
+7. **Upload**: Sketch → Upload (`Ctrl+U`)
+8. **Serial monitor**: Tools → Serial Monitor (`Ctrl+Shift+M`) at 115200 baud — use for debug/calibration output
 
 **Required libraries** — install via Library Manager:
-- *MIDI Library* by Forty Seven Effects
 - *Adafruit NeoPixel* by Adafruit
 - *FlashStorage_SAMD* by Khoi Hoang — EEPROM emulation on SAMD51 internal NVM (the Feather M4 has no hardware EEPROM; do not use the standard `EEPROM.h`)
-- *Adafruit TinyUSB Library* by Adafruit — USB host MIDI via MAX3421E (`CFG_TUH_MIDI` is already set to `CFG_TUH_DEVICE_MAX` in this library; no manual config edit required)
+- *MIDI Library* by Forty Seven Effects — used via `MIDI_CREATE_INSTANCE` in `midi_output.h` for hardware DIN MIDI on Serial1
+- *Adafruit TinyUSB Library* by Adafruit — USB host MIDI via MAX3421E (`CFG_TUH_MIDI` is already set to `CFG_TUH_DEVICE_MAX`; no manual config edit required)
 
 ## Sketch Architecture
 
@@ -94,3 +100,20 @@ Key implementation notes:
 - The middle and left two switches interact on the same analog line (Ring conductor), so decoding requires understanding the full voltage range produced by each combination. A calibration sketch that prints raw ADC values while pressing each pedal combination is the recommended first step.
 - Debounce the two switched pedals with `millis()`-based timing (not `delay()`) to keep the loop non-blocking.
 - Define MIDI channel and all voltage thresholds as named constants at the top of the sketch.
+
+## NeoPixel status LED
+
+During normal operation the onboard NeoPixel reflects system state. Pedal
+presence gates everything — the LED stays red until a pedal is attached,
+regardless of MIDI connection state.
+
+| Color | Meaning |
+|---|---|
+| Solid red | No pedal detected — Tip (A2) reads near 0V (pull-down, nothing driving it) |
+| Off | Pedal connected — hardware DIN MIDI assumed active (no detection possible) |
+| Solid green | Pedal connected + USB MIDI device confirmed via TinyUSB mount callback |
+
+Hardware DIN MIDI (5-pin) cannot be connection-detected: it is a one-way
+current loop with no handshake protocol. Plugging a cable in produces no
+electrical change the firmware can observe without additional hardware. Off
+therefore means "pedal ready, DIN MIDI assumed."

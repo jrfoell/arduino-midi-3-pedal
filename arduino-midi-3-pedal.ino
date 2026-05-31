@@ -3,7 +3,9 @@
 // Reads a triple piano pedal unit (TRS) and sends MIDI CC messages.
 
 #include <Adafruit_NeoPixel.h>
+#include "midi_output.h"
 #include "calibration.h"
+#include "status.h"
 
 // ─── Pin assignments ──────────────────────────────────────────────────────────
 #define PIN_PIXEL         8   // NeoPixel data  (Feather M4: PIN_NEOPIXEL = 8)
@@ -47,13 +49,17 @@ void setup() {
     runCalibration(pixel, calData);
   }
 
-  // MIDI will initialize here (Serial1 @ 31250 via MIDI FeatherWing)
+  initMidi();
 }
 
 // ─── Loop ────────────────────────────────────────────────────────────────────
 void loop() {
+  usbMidiTask();
 
-  // int tipRaw  = analogRead(PIN_TIP);
-  // int ringRaw = analogRead(PIN_RING);
+  int tipRaw  = analogRead(PIN_TIP);
+  int ringRaw = analogRead(PIN_RING);
+
+  updateStatusLed(pixel, tipRaw, usbMidiConnected);
+
   // Pedal decode and MIDI output will go here
 }

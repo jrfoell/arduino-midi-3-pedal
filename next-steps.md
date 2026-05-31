@@ -59,6 +59,7 @@ Sleeve/3.3V end when damper is released; moves toward Ring/GND end when pressed)
 - **Related functionality** is split into header files included by the .ino:
   - `calibration.h` — `CalibrationData` struct, EEPROM read/write,
     NeoPixel helpers, `runCalibration()`, `pedalHeldAtBoot()`
+  - `status.h` — `updateStatusLed()`: red = no pedal, off = pedal/DIN assumed, green = pedal + USB MIDI confirmed
   - Future: `pedal_decode.h` — voltage-to-state decode logic
   - Future: `midi_output.h` — MIDI CC send helpers (hardware DIN + USB host)
 - Goal: keep the main .ino under ~80 lines; no 1000-line files.
