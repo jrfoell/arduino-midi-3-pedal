@@ -101,6 +101,14 @@ Key implementation notes:
 - Debounce the two switched pedals with `millis()`-based timing (not `delay()`) to keep the loop non-blocking.
 - Define MIDI channel and all voltage thresholds as named constants at the top of the sketch.
 
+## Code style
+
+- Preprocessor conditionals (`#ifdef`, `#endif`, `#else`, `#ifndef`) are treated exactly like regular `if`/`else` statements:
+  - The directive itself is indented to match its surrounding scope (column 0 at file scope, 2 spaces inside a function body, etc.)
+  - Code **inside** the block is indented one additional level relative to the directive
+  - Example at file scope: `#ifdef` at col 0, body indented 2 spaces
+  - Example inside a function: `#ifdef` at 2 spaces, body indented 4 spaces
+
 ## NeoPixel status LED
 
 During normal operation the onboard NeoPixel reflects system state. Pedal

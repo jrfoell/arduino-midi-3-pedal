@@ -6,6 +6,10 @@
 // Uncomment to enable serial debug output. Must appear before all #includes.
 #define DEBUG_SERIAL
 
+// ─── Hardware feature flags ──────────────────────────────────────────────────
+// Uncomment when the MIDI FeatherWing is physically attached.
+// #define HARDWARE_MIDI
+
 #include <Adafruit_NeoPixel.h>
 #include "debug.h"
 #include "midi_output.h"
@@ -32,11 +36,14 @@ CalibrationData calData;
 
 // ─── Setup ───────────────────────────────────────────────────────────────────
 void setup() {
-  Serial.begin(115200);
-  while (!Serial);
-  Serial.println("MIDI 3 Pedal serial ready");
 
-  DEBUG_PRINTLN("Debug serial ready");
+  initMidi();
+
+  #ifdef DEBUG_SERIAL
+    Serial.begin(115200);
+    // NOTE: do NOT wait with while(!Serial) here. The USB Host may
+    // cause a deadlock. See Adafruit device_info_max3421e example.
+  #endif
 
   analogReadResolution(12);
 
@@ -60,13 +67,10 @@ void setup() {
   if (pedalHeldAtBoot(calData, pixel)) {
     runCalibration(pixel, calData);
   }
-
-  initMidi();
 }
 
 // ─── Loop ────────────────────────────────────────────────────────────────────
 void loop() {
-  Serial.println("Looping");
   usbMidiTask();
 
   int tipRaw  = analogRead(PIN_TIP);
@@ -76,7 +80,8 @@ void loop() {
 
   // Damper pedal (right / Tip)
   int damperCC = updateDamper(tipRaw, calData);
-  if (damperCC >= 0) {
-    sendCC(MIDI_CHANNEL, CC_DAMPER, (uint8_t)damperCC);
-  }
+  // if (damperCC >= 0) {
+  //   sendCC(MIDI_CHANNEL, CC_DAMPER, (uint8_t)damperCC);
+  // }
+  DEBUG_FLUSH();
 }

@@ -1,81 +1,92 @@
 // midi_output.h
 // Dual MIDI output: hardware DIN (MIDI FeatherWing via Serial1) and
-// USB host MIDI (USB Host FeatherWing via MAX3421E + TinyUSB).
+// USB MIDI device (Feather enumerates as a USB MIDI device on its native port).
 //
 // Exposes:
-//   initMidi()           — call once in setup()
-//   usbMidiTask()        — call every loop() to service the USB host stack
+//   initMidi()           — call once in setup(), before Serial.begin()
+//   usbMidiTask()        — call every loop() to service TinyUSB and read MIDI
 //   sendCC(ch, cc, val)  — sends to both outputs simultaneously
-//   usbMidiConnected     — true when a USB MIDI device is mounted
+//   usbMidiConnected     — true when a USB host has mounted this device
 
 #pragma once
 
-#include <SPI.h>
 #include <Adafruit_TinyUSB.h>
 #include <MIDI.h>
 #include "debug.h"
 
-// ─── Pin assignments (USB Host FeatherWing / MAX3421E) ────────────────────────
-#define PIN_USB_CS   10   // Chip select
-#define PIN_USB_INT   9   // Interrupt
-
 // ─── Hardware DIN MIDI (Serial1 via MIDI FeatherWing) ────────────────────────
-MIDI_CREATE_INSTANCE(HardwareSerial, Serial1, hwMidi);
+// Requires HARDWARE_MIDI defined in the .ino (before all includes).
+// Leave undefined when the MIDI FeatherWing is not physically attached.
+#ifdef HARDWARE_MIDI
+  MIDI_CREATE_INSTANCE(HardwareSerial, Serial1, hwMidi);
+#endif
 
-// ─── USB host (MAX3421E) ─────────────────────────────────────────────────────
-// SPI bus, CS, and INT are passed to the constructor; begin() takes only the
-// root hub port number (1 for MAX3421E).
-static Adafruit_USBH_Host USBHost(&SPI, PIN_USB_CS, PIN_USB_INT);
+// ─── USB MIDI device ──────────────────────────────────────────────────────────
+// The Feather enumerates as a USB MIDI device on its native USB port.
+// A computer or a keyboard with USB host capability connects to it.
+static Adafruit_USBD_MIDI _usbMidi;
+MIDI_CREATE_INSTANCE(Adafruit_USBD_MIDI, _usbMidi, usbMidi);
 
-// Interface index assigned by TinyUSB when a MIDI device mounts.
-// Used in all tuh_midi_* API calls. 255 = no device present.
-static uint8_t _usbMidiIdx = 255;
-
-// Read by the main loop and passed to updateStatusLed().
+// True when a USB host has enumerated and mounted this device.
+// Updated each loop by usbMidiTask(); read by updateStatusLed().
 static bool usbMidiConnected = false;
 
-// ─── Init / task ──────────────────────────────────────────────────────────────
+// ─── Init ─────────────────────────────────────────────────────────────────────
 
 static void initMidi() {
-  hwMidi.begin(MIDI_CHANNEL_OMNI);
-  hwMidi.turnThruOff();
-  USBHost.begin(1);  // 1 = root hub port for MAX3421E
+  // Required on cores without built-in TinyUSB support
+  if (!TinyUSBDevice.isInitialized()) {
+    TinyUSBDevice.begin(0);
+  }
+
+  _usbMidi.setStringDescriptor("Pedal Controller");
+
+  // begin() also calls _usbMidi.begin()
+  usbMidi.begin(MIDI_CHANNEL_OMNI);
+
+  // Force re-enumeration if already mounted (e.g. after a warm reset)
+  if (TinyUSBDevice.mounted()) {
+    TinyUSBDevice.detach();
+    delay(10);
+    TinyUSBDevice.attach();
+  }
+
+  #ifdef HARDWARE_MIDI
+    hwMidi.begin(MIDI_CHANNEL_OMNI);
+    hwMidi.turnThruOff();
+    DEBUG_PRINTLN("Hardware MIDI: initialized on Serial1");
+  #endif
 }
 
+// ─── Task ─────────────────────────────────────────────────────────────────────
+
+// Call every loop(). Services TinyUSB, tracks mount state, reads incoming MIDI.
 static void usbMidiTask() {
-  USBHost.task();
+  #ifdef TINYUSB_NEED_POLLING_TASK
+    TinyUSBDevice.task();
+  #endif
+
+  bool mounted = TinyUSBDevice.mounted();
+
+  if (mounted != usbMidiConnected) {
+    usbMidiConnected = mounted;
+    DEBUG_PRINTLN(mounted ? "USB MIDI: host connected" : "USB MIDI: host disconnected");
+  }
+
+  if (mounted) {
+    usbMidi.read();
+  }
 }
 
 // ─── Send ─────────────────────────────────────────────────────────────────────
 
-// Sends a MIDI CC on both outputs simultaneously.
-// USB send is skipped if no device is currently connected.
+// Sends a MIDI CC on all enabled outputs simultaneously.
 static void sendCC(uint8_t channel, uint8_t cc, uint8_t value) {
-  hwMidi.sendControlChange(cc, value, channel);
+  #ifdef HARDWARE_MIDI
+    hwMidi.sendControlChange(cc, value, channel);
+  #endif
 
   if (usbMidiConnected) {
-    uint8_t buf[3] = { (uint8_t)(0xB0 | (channel - 1)), cc, value };
-    tuh_midi_stream_write(_usbMidiIdx, 0, buf, sizeof(buf));
-    tuh_midi_write_flush(_usbMidiIdx);
-  }
-}
-
-// ─── TinyUSB MIDI host callbacks ──────────────────────────────────────────────
-// TinyUSB calls these as C functions; extern "C" is required in a C++ file.
-// Signatures must match midi_host.h exactly — the API changed to idx + struct.
-
-extern "C" {
-  void tuh_midi_mount_cb(uint8_t idx, const tuh_midi_mount_cb_t *mount_cb_data) {
-    (void)mount_cb_data;
-    _usbMidiIdx      = idx;
-    usbMidiConnected = true;
-    DEBUG_PRINTLN("USB MIDI: device connected");
-  }
-
-  void tuh_midi_umount_cb(uint8_t idx) {
-    (void)idx;
-    _usbMidiIdx      = 255;
-    usbMidiConnected = false;
-    DEBUG_PRINTLN("USB MIDI: device disconnected");
+    usbMidi.sendControlChange(cc, value, channel);
   }
 }
