@@ -36,14 +36,14 @@ CalibrationData calData;
 
 // ─── Setup ───────────────────────────────────────────────────────────────────
 void setup() {
-
-  initMidi();
-
+  // Serial must come before initMidi() — matches Adafruit device_info_max3421e
+  // example. Do NOT add while(!Serial): USBHost.begin() needs loop() to run
+  // its task to complete, so blocking here causes a deadlock.
   #ifdef DEBUG_SERIAL
     Serial.begin(115200);
-    // NOTE: do NOT wait with while(!Serial) here. The USB Host may
-    // cause a deadlock. See Adafruit device_info_max3421e example.
   #endif
+
+  initMidi();
 
   analogReadResolution(12);
 
