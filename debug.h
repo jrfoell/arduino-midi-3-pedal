@@ -6,11 +6,13 @@
 #pragma once
 
 #ifdef DEBUG_SERIAL
+  #define DEBUG_BEGIN(baud)       Serial.begin(baud)
   #define DEBUG_PRINT(x)          Serial.print(x)
   #define DEBUG_PRINTLN(x)        Serial.println(x)
   #define DEBUG_PRINT_VAL(lbl, v) do { Serial.print(lbl); Serial.print(": "); Serial.println(v); } while (0)
   #define DEBUG_FLUSH()           Serial.flush()
 #else
+  #define DEBUG_BEGIN(baud)       ((void)0)
   #define DEBUG_PRINT(x)          ((void)0)
   #define DEBUG_PRINTLN(x)        ((void)0)
   #define DEBUG_PRINT_VAL(lbl, v) ((void)0)
