@@ -8,7 +8,14 @@
       "WebFetch(domain:raw.githubusercontent.com)",
       "WebFetch(domain:forums.adafruit.com)",
       "Bash(grep -r \"tuh_midi_mount_cb\" /home/justin/Arduino/libraries/Adafruit_TinyUSB_Library/src/ 2>/dev/null | head -20)",
-      "Read(//home/justin/Arduino/libraries/Adafruit_TinyUSB_Library/src/**)"
+      "Read(//home/justin/Arduino/libraries/Adafruit_TinyUSB_Library/src/**)",
+      "Bash(gh repo *)",
+      "Bash(gh search *)",
+      "Bash(find /tmp/featherwing-pcb -type f \\\\\\( -name \"*.pdf\" -o -name \"*.sch\" -o -name \"*.kicad_sch\" -o -name \"*.brd\" -o -name \"*.kicad_pcb\" -o -name \"*.pdf\" \\\\\\) 2>/dev/null | head -20)",
+      "Read(//tmp/**)",
+      "Bash(grep -B 2 'pinref part=\"U1\" gate=\"G\\\\$1\" pin=\"#RES\"' \"/tmp/featherwing-pcb/Adafruit USB Host FeatherWing.sch\")",
+      "Bash(grep -B 50 'pinref part=\"U1\" gate=\"G\\\\$1\" pin=\"#RES\"' \"/tmp/featherwing-pcb/Adafruit USB Host FeatherWing.sch\")",
+      "Bash(awk '/^<net name=\"RESET\"/,/^<\\\\/net>/' \"/tmp/featherwing-pcb/Adafruit USB Host FeatherWing.sch\")"
     ]
   }
 }

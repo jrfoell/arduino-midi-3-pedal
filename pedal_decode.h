@@ -32,14 +32,14 @@ inline int updateDamper(int tipRaw, const CalibrationData& cal) {
 
   if (isPressed && !wasPressed) {
     wasPressed = true;
-    DEBUG_PRINT("Damper: pressed  (raw="); DEBUG_PRINT(tipRaw);
-    DEBUG_PRINT(" clamped="); DEBUG_PRINT(tipClamped);
-    DEBUG_PRINT(" cc="); DEBUG_PRINT(cc); DEBUG_PRINTLN(")");
+    // DEBUG_PRINT("Damper: pressed  (raw="); DEBUG_PRINT(tipRaw);
+    // DEBUG_PRINT(" clamped="); DEBUG_PRINT(tipClamped);
+    // DEBUG_PRINT(" cc="); DEBUG_PRINT(cc); DEBUG_PRINTLN(")");
   } else if (!isPressed && wasPressed) {
     wasPressed = false;
-    DEBUG_PRINT("Damper: released (raw="); DEBUG_PRINT(tipRaw);
-    DEBUG_PRINT(" clamped="); DEBUG_PRINT(tipClamped);
-    DEBUG_PRINT(" cc="); DEBUG_PRINT(cc); DEBUG_PRINTLN(")");
+    // DEBUG_PRINT("Damper: released (raw="); DEBUG_PRINT(tipRaw);
+    // DEBUG_PRINT(" clamped="); DEBUG_PRINT(tipClamped);
+    // DEBUG_PRINT(" cc="); DEBUG_PRINT(cc); DEBUG_PRINTLN(")");
   }
 
   if (cc == lastCC) return -1;

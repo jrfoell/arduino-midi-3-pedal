@@ -2,14 +2,11 @@
 // MIDI output via hardware DIN (MIDI FeatherWing / Serial1) and
 // USB host (USB Host FeatherWing / MAX3421E + TinyUSB).
 //
-// USB host currently detects device mount/unmount only.
-// MIDI send over USB host is TODO once detection is confirmed working.
-//
 // Exposes:
 //   initMidi()         — call once in setup(), after Serial.begin()
-//   usbMidiTask()      — call every loop() to service the USB host stack
+//   usbMidiTask()      — call every loop(); services host stack + reads MIDI
 //   sendCC(ch, cc, v)  — sends to all enabled outputs
-//   usbMidiConnected   — true when any USB device is mounted on the host port
+//   usbMidiConnected   — true when a USB MIDI device is mounted
 
 #pragma once
 
@@ -31,13 +28,15 @@
 // ─── USB host (MAX3421E) ─────────────────────────────────────────────────────
 static Adafruit_USBH_Host USBHost(&SPI, PIN_USB_CS, PIN_USB_INT);
 
-// True when any USB device is mounted on the host port.
-// Set/cleared by tuh_mount_cb / tuh_umount_cb.
+// Interface index set by tuh_midi_mount_cb; used in all tuh_midi_* calls.
+static uint8_t _usbMidiIdx = 255;
+
+// True when a USB MIDI device is mounted and ready.
 static bool usbMidiConnected = false;
 
 // ─── Init / task ──────────────────────────────────────────────────────────────
 
-// Call after Serial.begin() — matches Adafruit device_info_max3421e example.
+// Must be called after Serial.begin() — see Adafruit device_info_max3421e.
 static void initMidi() {
   #ifdef HARDWARE_MIDI
     hwMidi.begin(MIDI_CHANNEL_OMNI);
@@ -48,36 +47,72 @@ static void initMidi() {
   USBHost.begin(1);
 }
 
+// Call every loop(). Services the USB host stack and drains incoming MIDI.
 static void usbMidiTask() {
   USBHost.task();
+
+  if (!usbMidiConnected) return;
+
+  // Drain all available MIDI packets from the device.
+  // USB MIDI packets are 4 bytes: [header, status, data1, data2]
+  uint8_t packet[4];
+  while (tuh_midi_packet_read(_usbMidiIdx, packet)) {
+    uint8_t status = packet[1];
+    uint8_t type   = status & 0xF0;
+    uint8_t ch     = (status & 0x0F) + 1;  // convert to 1-based
+
+    if (type == 0x90 && packet[3] > 0) {   // NoteOn (velocity 0 = NoteOff)
+      DEBUG_PRINT("NoteOn   ch="); DEBUG_PRINT(ch);
+      DEBUG_PRINT(" note=");       DEBUG_PRINT(packet[2]);
+      DEBUG_PRINT(" vel=");        DEBUG_PRINTLN(packet[3]);
+    } else if (type == 0x80 || (type == 0x90 && packet[3] == 0)) {
+      DEBUG_PRINT("NoteOff  ch="); DEBUG_PRINT(ch);
+      DEBUG_PRINT(" note=");       DEBUG_PRINTLN(packet[2]);
+    }
+  }
 }
 
 // ─── Send ─────────────────────────────────────────────────────────────────────
 
-// Sends a MIDI CC on all enabled outputs.
 static void sendCC(uint8_t channel, uint8_t cc, uint8_t value) {
   #ifdef HARDWARE_MIDI
     hwMidi.sendControlChange(cc, value, channel);
   #endif
 
-  // USB MIDI send — TODO once host device detection is confirmed
-  (void)channel; (void)cc; (void)value;
+  if (usbMidiConnected) {
+    uint8_t buf[3] = { (uint8_t)(0xB0 | (channel - 1)), cc, value };
+    tuh_midi_stream_write(_usbMidiIdx, 0, buf, sizeof(buf));
+    tuh_midi_write_flush(_usbMidiIdx);
+  }
 }
 
 // ─── USB host callbacks ───────────────────────────────────────────────────────
-// Generic callbacks — fire for any USB device class, not just MIDI.
-// Using these rather than tuh_midi_mount_cb to validate host detection first.
 
 extern "C" {
+  // Generic — fires for any USB device class
   void tuh_mount_cb(uint8_t daddr) {
-    usbMidiConnected = true;
     DEBUG_PRINT("USB: device mounted  addr=");
     DEBUG_PRINTLN(daddr);
   }
 
   void tuh_umount_cb(uint8_t daddr) {
-    usbMidiConnected = false;
     DEBUG_PRINT("USB: device removed  addr=");
     DEBUG_PRINTLN(daddr);
+  }
+
+  // MIDI class — fires once the MIDI host driver has set up the device
+  void tuh_midi_mount_cb(uint8_t idx, const tuh_midi_mount_cb_t *data) {
+    _usbMidiIdx      = idx;
+    usbMidiConnected = true;
+    DEBUG_PRINT("USB MIDI: device ready  idx="); DEBUG_PRINT(idx);
+    DEBUG_PRINT(" rx_cables=");                  DEBUG_PRINT(data->rx_cable_count);
+    DEBUG_PRINT(" tx_cables=");                  DEBUG_PRINTLN(data->tx_cable_count);
+  }
+
+  void tuh_midi_umount_cb(uint8_t idx) {
+    (void)idx;
+    _usbMidiIdx      = 255;
+    usbMidiConnected = false;
+    DEBUG_PRINTLN("USB MIDI: device removed");
   }
 }
