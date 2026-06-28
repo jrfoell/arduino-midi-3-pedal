@@ -20,7 +20,7 @@
 #define DEFAULT_RING_LEFT      2494
 #define DEFAULT_RING_BOTH      2857
 #define DEFAULT_TIP_REST       3965
-#define DEFAULT_TIP_PRESSED    1813
+#define DEFAULT_TIP_PRESSED    3050
 
 // ─── Calibration timing ──────────────────────────────────────────────────────
 #define CALIB_HOLD_MS       2000   // Pedal hold duration at boot to trigger calibration (ms)

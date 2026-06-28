@@ -9,9 +9,11 @@
 #include "debug.h"
 
 // ─── Damper (right pedal / Tip) ───────────────────────────────────────────────
-// Potentiometer — supports half-pedaling. Maps the active range to 64–127 so
-// any press past the dead zone immediately sends CC ≥ 64 (sustain on). Deeper
-// presses increase toward 127 for half-pedaling depth on supporting keyboards.
+// Potentiometer — supports half-pedaling. Uses a two-segment piecewise map:
+//   first DAMPER_SUSTAIN_ON_PCT% of active travel → CC 0–63
+//   remaining travel through DAMPER_FULL_PCT% → CC 64–127
+// CC 64 (sustain on) therefore kicks in early; CC 127 is reached before the
+// mechanical floor so it is reliably achieved in normal playing.
 // Off (pedal released) sends CC 0.
 
 // Dead zone applied before the damper mapping to absorb two noise sources:
@@ -20,11 +22,23 @@
 // Increase if false presses persist; decrease if response feels sluggish.
 #define ADC_DEAD_ZONE 250
 
+// How often to print the live CC level while the damper pedal is held (ms).
+#define DAMPER_DEBUG_PRINT_MS 500
+
 // Hysteresis band above the press threshold — pedal must rise this many counts
 // above pressThresh before a release is registered. Prevents oscillation when
 // the pedal hovers near the threshold. Must be larger than the observed ADC
 // swing at the boundary (~100 counts from the serial output).
 #define DAMPER_HYSTERESIS 150
+
+// Physical travel percentage at which CC reaches 127. Readings past this point
+// are clamped to 127. Values below 100 ensure full sustain is reliably achieved
+// before the mechanical floor.
+#define DAMPER_FULL_PCT 97
+
+// Active travel percentage at which CC 64 (sustain on) is first reached.
+// Lower values front-load the sustain region so it triggers on a lighter press.
+#define DAMPER_SUSTAIN_ON_PCT 33
 
 // Returns the new CC value (0–127) if it changed, or -1 if unchanged.
 inline int updateDamper(int tipRaw, const CalibrationData& cal) {
@@ -43,8 +57,32 @@ inline int updateDamper(int tipRaw, const CalibrationData& cal) {
 
   int cc = 0;
   if (active) {
-    cc = map(tipRaw, pressThresh, cal.tipPressed, 64, 127);
-    cc = constrain(cc, 64, 127);
+    // tipAtFull: raw value at DAMPER_FULL_PCT% of physical travel (CC 127 ceiling).
+    // sustainOnRaw: raw value at DAMPER_SUSTAIN_ON_PCT% of active travel (CC 64 breakpoint).
+    // Tip falls as the pedal is pressed, so both targets are below pressThresh.
+    int tipAtFull    = cal.tipRest - (int)((long)(cal.tipRest - cal.tipPressed) * DAMPER_FULL_PCT / 100);
+    int activeRange  = pressThresh - tipAtFull;
+    int sustainOnRaw = pressThresh - (int)((long)activeRange * DAMPER_SUSTAIN_ON_PCT / 100);
+    if (tipRaw >= sustainOnRaw) {
+      // First segment: light press — CC 0–63
+      cc = map(tipRaw, pressThresh, sustainOnRaw, 0, 63);
+      cc = constrain(cc, 0, 63);
+    } else {
+      // Second segment: sustain active — CC 64–127
+      cc = map(tipRaw, sustainOnRaw, tipAtFull, 64, 127);
+      cc = constrain(cc, 64, 127);
+    }
+  }
+
+  // Continuous status print while pedal is held — shows live CC level (64–127).
+  if (active) {
+    static unsigned long lastPrint = 0;
+    unsigned long now = millis();
+    if (now - lastPrint >= DAMPER_DEBUG_PRINT_MS) {
+      lastPrint = now;
+      DEBUG_PRINT("Damper: held     (raw="); DEBUG_PRINT(tipRaw);
+      DEBUG_PRINT(" cc="); DEBUG_PRINT(cc); DEBUG_PRINTLN(")");
+    }
   }
 
   if (cc == lastCC) return -1;
