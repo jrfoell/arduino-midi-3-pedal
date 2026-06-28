@@ -19,11 +19,11 @@
 // Requires HARDWARE_MIDI defined in the .ino (before all includes).
 #ifdef HARDWARE_MIDI
   MIDI_CREATE_INSTANCE(HardwareSerial, Serial1, hwMidi);
-  #define MIDI_BEGIN()    hwMidi.begin(MIDI_CHANNEL_OMNI);
-  #define MIDI_THRU_OFF() hwMidi.turnThruOff();
+  #define MIDI_BEGIN()   hwMidi.begin(MIDI_CHANNEL_OMNI);
+  #define MIDI_THRU_ON() hwMidi.turnThruOn();
 #else
-  #define MIDI_BEGIN()    ((void)0)
-  #define MIDI_THRU_OFF() ((void)0)
+  #define MIDI_BEGIN()   ((void)0)
+  #define MIDI_THRU_ON() ((void)0)
 #endif
 
 // ─── USB host (MAX3421E) ─────────────────────────────────────────────────────
@@ -95,7 +95,7 @@ static void _noteOff(uint8_t ch, uint8_t note) {
 // Must be called after Serial.begin() — see Adafruit device_info_max3421e.
 static void initMidi() {
   MIDI_BEGIN();
-  MIDI_THRU_OFF();
+  MIDI_THRU_ON();  // DIN IN → DIN OUT thru (handled by MIDI Library)
   #ifdef HARDWARE_MIDI
     hwMidi.setHandleNoteOn(_hwNoteOn);
     hwMidi.setHandleNoteOff(_hwNoteOff);
@@ -153,6 +153,20 @@ static void usbMidiTask() {
       } else if (type == 0x80 || (type == 0x90 && packet[3] == 0)) {
         _noteOff(ch, packet[2]);
       }
+
+      // USB IN → DIN OUT thru. Pedal CCs queue in the same Serial1 TX buffer.
+      #ifdef HARDWARE_MIDI
+        if (type == 0xC0 || type == 0xD0) {
+          // 2-byte: Program Change, Channel Pressure
+          Serial1.write(packet[1]);
+          Serial1.write(packet[2]);
+        } else if (type >= 0x80 && type <= 0xE0) {
+          // 3-byte: Note Off/On, Poly Pressure, CC, Pitch Bend
+          Serial1.write(packet[1]);
+          Serial1.write(packet[2]);
+          Serial1.write(packet[3]);
+        }
+      #endif
     }
   #endif
 }
