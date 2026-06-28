@@ -111,17 +111,29 @@ Key implementation notes:
 
 ## NeoPixel status LED
 
-During normal operation the onboard NeoPixel reflects system state. Pedal
-presence gates everything — the LED stays red until a pedal is attached,
-regardless of MIDI connection state.
+Reflects pedal connection state. The transition is debounced to
+prevent false triggers from a floating Tip pin at power-on.
 
 | Color | Meaning |
 |---|---|
-| Solid red | No pedal detected — Tip (A2) reads near 0V (pull-down, nothing driving it) |
-| Off | Pedal connected — hardware DIN MIDI assumed active (no detection possible) |
-| Solid green | Pedal connected + USB MIDI device confirmed via TinyUSB mount callback |
+| Solid red | No pedal detected — Tip (A2) reads near 0 V (pull-down, nothing driving it) |
+| Solid green | Pedal connected and ready |
 
-Hardware DIN MIDI (5-pin) cannot be connection-detected: it is a one-way
-current loop with no handshake protocol. Plugging a cable in produces no
-electrical change the firmware can observe without additional hardware. Off
-therefore means "pedal ready, DIN MIDI assumed."
+Color constants live in `colors.h` and are used by both `status.h` and `calibration.h`.
+
+## Built-in LED (LED_BUILTIN)
+
+Tracks USB MIDI device activity on the host port (MAX3421E). Lit while a USB
+MIDI keyboard has active held notes; off when all notes are released or no
+device is mounted.
+
+| State | Meaning |
+|---|---|
+| On (lit) | USB MIDI device connected with one or more active (held) notes |
+| Off | No active notes, or no USB MIDI device mounted |
+
+Driven by the NoteOn / NoteOff handler inside `usbMidiTask()` in `midi_output.h`.
+
+Hardware DIN MIDI (5-pin) cannot be connection-detected — it is a one-way
+current loop with no handshake protocol — so DIN activity does not affect
+LED_BUILTIN.

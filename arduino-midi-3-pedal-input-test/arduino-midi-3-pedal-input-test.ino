@@ -7,7 +7,7 @@ const int PIN_RING = A3;  // Middle + Left switch network
 
 const float V_REF      = 3.3;
 const int   ADC_MAX    = 4095;  // 12-bit ADC on Feather M4
-const int   PRINT_MS   = 100;   // print interval in milliseconds
+const int   PRINT_MS   = 1000;   // print interval in milliseconds
 
 void setup() {
   Serial.begin(115200);

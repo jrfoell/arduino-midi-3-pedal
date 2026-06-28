@@ -91,6 +91,8 @@ static void sendCC(uint8_t channel, uint8_t cc, uint8_t value) {
 
   // Call every loop(). Services the USB host stack and drains incoming MIDI.
   static void usbMidiTask() {
+    static int activeNotes = 0;
+
     USBHost.task();
 
     if (!usbMidiConnected) return;
@@ -104,29 +106,18 @@ static void sendCC(uint8_t channel, uint8_t cc, uint8_t value) {
       uint8_t ch     = (status & 0x0F) + 1;  // convert to 1-based
 
       if (type == 0x90 && packet[3] > 0) {   // NoteOn (velocity 0 = NoteOff)
+        if (activeNotes == 0) digitalWrite(LED_BUILTIN, LOW);
+        activeNotes++;
         DEBUG_PRINT("NoteOn   ch="); DEBUG_PRINT(ch);
         DEBUG_PRINT(" note=");       DEBUG_PRINT(packet[2]);
         DEBUG_PRINT(" vel=");        DEBUG_PRINTLN(packet[3]);
       } else if (type == 0x80 || (type == 0x90 && packet[3] == 0)) {
+        if (activeNotes > 0) activeNotes--;
+        if (activeNotes == 0) digitalWrite(LED_BUILTIN, HIGH);
         DEBUG_PRINT("NoteOff  ch="); DEBUG_PRINT(ch);
         DEBUG_PRINT(" note=");       DEBUG_PRINTLN(packet[2]);
       }
     }
-  }
-
- // Invoked when device is mounted (configured)
-  void tuh_mount_cb(uint8_t daddr) {
-    Serial.printf("Device attached, address = %d\r\n", daddr);
-
-    dev_info_t *dev = &dev_info[daddr - 1];
-    dev->mounted = true;
-  }
-
-  // Invoked when device is unmounted (bus reset/unplugged)
-  void tuh_umount_cb(uint8_t daddr) {
-    Serial.printf("Device removed, address = %d\r\n", daddr);
-    dev_info_t *dev = &dev_info[daddr - 1];
-    dev->mounted = false;
   }
 
   // ─── USB host callbacks ───────────────────────────────────────────────────────

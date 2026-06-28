@@ -10,7 +10,7 @@
 // Uncomment when the MIDI FeatherWing is physically attached.
 #define HARDWARE_MIDI
 // Uncomment when the USB Host FeatherWing (MAX3421E) is physically attached.
-// #define HARDWARE_USB
+#define HARDWARE_USB
 
 #include <Adafruit_NeoPixel.h>
 #include <Adafruit_TinyUSB.h>
@@ -44,8 +44,6 @@ void setup() {
   DEBUG_PRINTLN("Turning on power LED");
   pinMode(LED_BUILTIN, OUTPUT);
   digitalWrite(LED_BUILTIN, HIGH);
-  
-  blinkHeartbeat();
 
   DEBUG_PRINTLN("Initializing MIDI");
   initMidi();
@@ -75,17 +73,28 @@ void setup() {
 
 // ─── Loop ────────────────────────────────────────────────────────────────────
 void loop() {
-  blinkHeartbeat();
-
+  // Read raw ADC values from the pedals.
   int tipRaw  = analogRead(PIN_TIP);
   int ringRaw = analogRead(PIN_RING);
 
-  updateStatusLed(pixel, tipRaw, usbMidiConnected);
+  updateStatusLed(pixel, tipRaw);
 
   // Damper pedal (right / Tip)
   int damperCC = updateDamper(tipRaw, calData);
   if (damperCC >= 0) {
     sendCC(MIDI_CHANNEL, CC_DAMPER, (uint8_t)damperCC);
+  }
+
+  // Sostenuto pedal (middle / Ring)
+  int sostenutoCC = updateSostenuto(ringRaw, calData);
+  if (sostenutoCC >= 0) {
+    sendCC(MIDI_CHANNEL, CC_SOSTENUTO, (uint8_t)sostenutoCC);
+  }
+
+  // Soft pedal (left / Ring)
+  int softCC = updateSoft(ringRaw, calData);
+  if (softCC >= 0) {
+    sendCC(MIDI_CHANNEL, CC_SOFT, (uint8_t)softCC);
   }
 
   usbMidiTask();

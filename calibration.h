@@ -6,6 +6,7 @@
 
 #include <Adafruit_NeoPixel.h>
 #include <FlashStorage_SAMD.h>
+#include "colors.h"
 #include "debug.h"
 
 // ─── Pin assignments ─────────────────────────────────────────────────────────
@@ -14,12 +15,12 @@
 
 // ─── Default calibration (measured in initial bench test) ────────────────────
 // Used on first boot before a calibration run has been saved to EEPROM.
-#define DEFAULT_RING_BASELINE    60
-#define DEFAULT_RING_MIDDLE    1950
-#define DEFAULT_RING_LEFT      2450
-#define DEFAULT_RING_BOTH      2850
-#define DEFAULT_TIP_REST       3950
-#define DEFAULT_TIP_PRESSED    1850
+#define DEFAULT_RING_BASELINE     8
+#define DEFAULT_RING_MIDDLE    1960
+#define DEFAULT_RING_LEFT      2494
+#define DEFAULT_RING_BOTH      2857
+#define DEFAULT_TIP_REST       3965
+#define DEFAULT_TIP_PRESSED    1813
 
 // ─── Calibration timing ──────────────────────────────────────────────────────
 #define CALIB_HOLD_MS       2000   // Pedal hold duration at boot to trigger calibration (ms)
@@ -138,7 +139,7 @@ static int calibPedalPhase(Adafruit_NeoPixel& px, uint32_t color,
     if (samplingDone && !isPressed) break;  // pedal released → advance
   }
 
-  neoSet(px, 0);
+  neoSet(px, PIXEL_OFF);
   delay(400);
   return (sampleCount > 0) ? (int)(sampleSum / sampleCount) : pressThreshold;
 }
@@ -150,16 +151,14 @@ static int calibPedalPhase(Adafruit_NeoPixel& px, uint32_t color,
 // Call once in setup() after calibration data has been loaded or defaulted.
 inline bool pedalHeldAtBoot(const CalibrationData& calData, Adafruit_NeoPixel& px) {
   int threshold = calData.ringBaseline + CALIB_PRESS_MARGIN;
-  const uint32_t BLUE = px.Color(0, 0, 200);
-
   if (analogRead(PIN_RING) <= threshold) return false;
 
   // Solid blue while hold window counts down
-  neoSet(px, BLUE);
+  neoSet(px, PIXEL_BLUE);
   unsigned long start = millis();
   while (millis() - start < CALIB_HOLD_MS) {
     if (analogRead(PIN_RING) <= threshold) {
-      neoSet(px, 0);
+      neoSet(px, PIXEL_OFF);
       return false;
     }
     delay(20);
@@ -172,26 +171,19 @@ inline bool pedalHeldAtBoot(const CalibrationData& calData, Adafruit_NeoPixel& p
     unsigned long now = millis();
     if (now - blinkTimer >= CALIB_FAST_BLINK_MS) {
       blinkOn = !blinkOn;
-      neoSet(px, blinkOn ? BLUE : 0);
+      neoSet(px, blinkOn ? PIXEL_BLUE : PIXEL_OFF);
       blinkTimer = now;
     }
     delay(5);
   }
 
-  neoSet(px, 0);
+  neoSet(px, PIXEL_OFF);
   return true;
 }
 
 // Full calibration sequence. Right-to-left pedal order.
 // Saves completed data to EEPROM and signals done with green blinks.
 static void runCalibration(Adafruit_NeoPixel& px, CalibrationData& data) {
-  const uint32_t BLUE   = px.Color(0,   0,   200);
-  const uint32_t VIOLET = px.Color(148, 0,   211);
-  const uint32_t RED    = px.Color(200, 0,   0  );
-  const uint32_t ORANGE = px.Color(220, 80,  0  );
-  const uint32_t YELLOW = px.Color(220, 180, 0  );
-  const uint32_t GREEN  = px.Color(0,   200, 0  );
-
   DEBUG_PRINTLN("Calibration: initiated");
 
   // Wait for any held pedal to be released before sampling the baseline.
@@ -203,7 +195,7 @@ static void runCalibration(Adafruit_NeoPixel& px, CalibrationData& data) {
 
   // Phase 1: Solid blue — sample Ring and Tip with all pedals at rest
   DEBUG_PRINTLN("Calibration: step 1 — rest (release all pedals)");
-  neoSet(px, BLUE);
+  neoSet(px, PIXEL_BLUE);
   {
     long ringSum = 0, tipSum = 0;
     int  count = 0;
@@ -219,12 +211,12 @@ static void runCalibration(Adafruit_NeoPixel& px, CalibrationData& data) {
   }
   DEBUG_PRINT_VAL("  ringBaseline", data.ringBaseline);
   DEBUG_PRINT_VAL("  tipRest",      data.tipRest);
-  neoSet(px, 0);
+  neoSet(px, PIXEL_OFF);
   delay(400);
 
   // Phase 2: Violet — right / damper pedal (Tip falls when pressed)
   DEBUG_PRINTLN("Calibration: step 2 — damper (press right pedal)");
-  data.tipPressed = calibPedalPhase(px, VIOLET,
+  data.tipPressed = calibPedalPhase(px, PIXEL_VIOLET,
                                      PIN_TIP,
                                      data.tipRest - CALIB_PRESS_MARGIN,
                                      false);
@@ -232,7 +224,7 @@ static void runCalibration(Adafruit_NeoPixel& px, CalibrationData& data) {
 
   // Phase 3: Red — middle / sostenuto pedal (Ring rises when pressed)
   DEBUG_PRINTLN("Calibration: step 3 — sostenuto (press middle pedal)");
-  data.ringMiddle = calibPedalPhase(px, RED,
+  data.ringMiddle = calibPedalPhase(px, PIXEL_RED,
                                      PIN_RING,
                                      data.ringBaseline + CALIB_PRESS_MARGIN,
                                      true);
@@ -240,7 +232,7 @@ static void runCalibration(Adafruit_NeoPixel& px, CalibrationData& data) {
 
   // Phase 4: Orange — left / soft pedal (Ring rises when pressed)
   DEBUG_PRINTLN("Calibration: step 4 — soft (press left pedal)");
-  data.ringLeft = calibPedalPhase(px, ORANGE,
+  data.ringLeft = calibPedalPhase(px, PIXEL_ORANGE,
                                    PIN_RING,
                                    data.ringBaseline + CALIB_PRESS_MARGIN,
                                    true);
@@ -249,7 +241,7 @@ static void runCalibration(Adafruit_NeoPixel& px, CalibrationData& data) {
   // Phase 5: Yellow — middle + left together
   // Threshold set above ringLeft so a single pedal doesn't accidentally trigger
   DEBUG_PRINTLN("Calibration: step 5 — both (press middle + left together)");
-  data.ringBoth = calibPedalPhase(px, YELLOW,
+  data.ringBoth = calibPedalPhase(px, PIXEL_YELLOW,
                                    PIN_RING,
                                    data.ringLeft + CALIB_PRESS_MARGIN / 2,
                                    true);
@@ -260,9 +252,9 @@ static void runCalibration(Adafruit_NeoPixel& px, CalibrationData& data) {
   saveCalibration(data);
   DEBUG_PRINTLN("Calibration: complete — values written to flash");
   for (int i = 0; i < 6; i++) {
-    neoSet(px, (i % 2 == 0) ? GREEN : 0);
+    neoSet(px, (i % 2 == 0) ? PIXEL_GREEN : PIXEL_OFF);
     delay(200);
   }
-  neoSet(px, 0);
+  neoSet(px, PIXEL_OFF);
 }
 
