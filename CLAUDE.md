@@ -123,17 +123,14 @@ Color constants live in `colors.h` and are used by both `status.h` and `calibrat
 
 ## Built-in LED (LED_BUILTIN)
 
-Tracks USB MIDI device activity on the host port (MAX3421E). Lit while a USB
-MIDI keyboard has active held notes; off when all notes are released or no
-device is mounted.
+Tracks note activity across both MIDI inputs. Lit while any note is held;
+off when all notes are released.
 
 | State | Meaning |
 |---|---|
-| On (lit) | USB MIDI device connected with one or more active (held) notes |
-| Off | No active notes, or no USB MIDI device mounted |
+| On (lit) | One or more notes currently held (from DIN or USB MIDI) |
+| Off | No active notes |
 
-Driven by the NoteOn / NoteOff handler inside `usbMidiTask()` in `midi_output.h`.
-
-Hardware DIN MIDI (5-pin) cannot be connection-detected — it is a one-way
-current loop with no handshake protocol — so DIN activity does not affect
-LED_BUILTIN.
+Driven by `_noteOn()` / `_noteOff()` in `midi_output.h`, which share a single
+`_activeNotes` counter across both DIN MIDI (via MIDI Library callbacks set in
+`initMidi()`) and USB MIDI host (via packet drain in `usbMidiTask()`).

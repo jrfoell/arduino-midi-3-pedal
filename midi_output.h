@@ -1,10 +1,10 @@
 // midi_output.h
-// MIDI output via hardware DIN (MIDI FeatherWing / Serial1) and
+// MIDI I/O via hardware DIN (MIDI FeatherWing / Serial1) and
 // USB host (USB Host FeatherWing / MAX3421E + TinyUSB).
 //
 // Exposes:
 //   initMidi()         — call once in setup(), after Serial.begin()
-//   usbMidiTask()      — call every loop(); services host stack + reads MIDI
+//   usbMidiTask()      — call every loop(); services DIN MIDI input + USB host
 //   sendCC(ch, cc, v)  — sends to all enabled outputs
 //   usbMidiConnected   — true when a USB MIDI device is mounted
 
@@ -54,21 +54,54 @@
   static bool usbMidiConnected = false;
 
 #else
-  #define USB_HOST_BEGIN(baud)       ((void)0)
+  #define USB_HOST_BEGIN() ((void)0)
   // No USB host hardware — always report disconnected.
   static bool usbMidiConnected = false;
 #endif
 
-// ─── Init / task ──────────────────────────────────────────────────────────────
+// ─── Shared note / LED tracking ───────────────────────────────────────────────
+// Counts held notes across DIN MIDI and USB MIDI inputs combined.
+// LED_BUILTIN is lit (LOW on Feather M4) while at least one note is held.
+static int _activeNotes = 0;
+
+static void _noteOn(uint8_t ch, uint8_t note, uint8_t vel) {
+  if (_activeNotes == 0) digitalWrite(LED_BUILTIN, LOW);
+  _activeNotes++;
+  DEBUG_PRINT("NoteOn   ch="); DEBUG_PRINT(ch);
+  DEBUG_PRINT(" note=");       DEBUG_PRINT(note);
+  DEBUG_PRINT(" vel=");        DEBUG_PRINTLN(vel);
+}
+
+static void _noteOff(uint8_t ch, uint8_t note) {
+  if (_activeNotes > 0) _activeNotes--;
+  if (_activeNotes == 0) digitalWrite(LED_BUILTIN, HIGH);
+  DEBUG_PRINT("NoteOff  ch="); DEBUG_PRINT(ch);
+  DEBUG_PRINT(" note=");       DEBUG_PRINTLN(note);
+}
+
+// ─── DIN MIDI note callbacks ──────────────────────────────────────────────────
+#ifdef HARDWARE_MIDI
+  static void _hwNoteOn(byte ch, byte note, byte vel) {
+    _noteOn(ch, note, vel);
+  }
+  static void _hwNoteOff(byte ch, byte note, byte vel) {
+    (void)vel;
+    _noteOff(ch, note);
+  }
+#endif
+
+// ─── Init ────────────────────────────────────────────────────────────────────
 
 // Must be called after Serial.begin() — see Adafruit device_info_max3421e.
 static void initMidi() {
   MIDI_BEGIN();
   MIDI_THRU_OFF();
-
+  #ifdef HARDWARE_MIDI
+    hwMidi.setHandleNoteOn(_hwNoteOn);
+    hwMidi.setHandleNoteOff(_hwNoteOff);
+  #endif
   USB_HOST_BEGIN();
 }
-
 
 // ─── Send ─────────────────────────────────────────────────────────────────────
 
@@ -79,20 +112,30 @@ static void sendCC(uint8_t channel, uint8_t cc, uint8_t value) {
 
   #ifdef HARDWARE_USB
     if (usbMidiConnected) {
-      uint8_t buf[3] = { (uint8_t)(0xB0 | (channel - 1)), cc, value };
-      tuh_midi_stream_write(_usbMidiIdx, 0, buf, sizeof(buf));
+      // 4-byte USB MIDI 1.0 packet: [CIN|cable, status, data1, data2]
+      // CIN 0x0B = Control Change (matches high nibble of 0xBx status byte).
+      // Uses packet_write rather than stream_write to avoid a silent early-exit
+      // in stream_write when tx_cable_count == 0 on some devices.
+      uint8_t packet[4] = {
+        0x0B,
+        (uint8_t)(0xB0 | (channel - 1)),
+        cc,
+        value
+      };
+      tuh_midi_packet_write(_usbMidiIdx, packet);
       tuh_midi_write_flush(_usbMidiIdx);
     }
   #endif
 }
 
+// ─── Task (call every loop) ───────────────────────────────────────────────────
 
-#ifdef HARDWARE_USB
+static void usbMidiTask() {
+  #ifdef HARDWARE_MIDI
+    hwMidi.read();
+  #endif
 
-  // Call every loop(). Services the USB host stack and drains incoming MIDI.
-  static void usbMidiTask() {
-    static int activeNotes = 0;
-
+  #ifdef HARDWARE_USB
     USBHost.task();
 
     if (!usbMidiConnected) return;
@@ -106,21 +149,16 @@ static void sendCC(uint8_t channel, uint8_t cc, uint8_t value) {
       uint8_t ch     = (status & 0x0F) + 1;  // convert to 1-based
 
       if (type == 0x90 && packet[3] > 0) {   // NoteOn (velocity 0 = NoteOff)
-        if (activeNotes == 0) digitalWrite(LED_BUILTIN, LOW);
-        activeNotes++;
-        DEBUG_PRINT("NoteOn   ch="); DEBUG_PRINT(ch);
-        DEBUG_PRINT(" note=");       DEBUG_PRINT(packet[2]);
-        DEBUG_PRINT(" vel=");        DEBUG_PRINTLN(packet[3]);
+        _noteOn(ch, packet[2], packet[3]);
       } else if (type == 0x80 || (type == 0x90 && packet[3] == 0)) {
-        if (activeNotes > 0) activeNotes--;
-        if (activeNotes == 0) digitalWrite(LED_BUILTIN, HIGH);
-        DEBUG_PRINT("NoteOff  ch="); DEBUG_PRINT(ch);
-        DEBUG_PRINT(" note=");       DEBUG_PRINTLN(packet[2]);
+        _noteOff(ch, packet[2]);
       }
     }
-  }
+  #endif
+}
 
-  // ─── USB host callbacks ───────────────────────────────────────────────────────
+// ─── USB host callbacks ───────────────────────────────────────────────────────
+#ifdef HARDWARE_USB
   extern "C" {
     // Generic — fires for any USB device class
     void tuh_mount_cb(uint8_t daddr) {
@@ -148,9 +186,5 @@ static void sendCC(uint8_t channel, uint8_t cc, uint8_t value) {
       usbMidiConnected = false;
       DEBUG_PRINTLN("USB MIDI: device removed");
     }
-  }
-#else
-  static void usbMidiTask() {
-    // No USB host hardware — do nothing.
   }
 #endif

@@ -15,7 +15,8 @@
       "Read(//tmp/**)",
       "Bash(grep -B 2 'pinref part=\"U1\" gate=\"G\\\\$1\" pin=\"#RES\"' \"/tmp/featherwing-pcb/Adafruit USB Host FeatherWing.sch\")",
       "Bash(grep -B 50 'pinref part=\"U1\" gate=\"G\\\\$1\" pin=\"#RES\"' \"/tmp/featherwing-pcb/Adafruit USB Host FeatherWing.sch\")",
-      "Bash(awk '/^<net name=\"RESET\"/,/^<\\\\/net>/' \"/tmp/featherwing-pcb/Adafruit USB Host FeatherWing.sch\")"
+      "Bash(awk '/^<net name=\"RESET\"/,/^<\\\\/net>/' \"/tmp/featherwing-pcb/Adafruit USB Host FeatherWing.sch\")",
+      "Bash(gh api *)"
     ]
   }
 }
